@@ -1,0 +1,8 @@
+"""Application settings for Perfect Shade Bid Generator."""
+
+APP_NAME = "Perfect Shade Bid Generator"
+DEFAULT_SCOPE_ROWS = 3
+DEFAULT_PRICING_ROWS = 3
+MAX_SCOPE_ITEMS = 20
+MAX_PRICING_LINES = 50
+MAX_ADDITIONAL_TERMS = 20
