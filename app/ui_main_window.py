@@ -350,7 +350,7 @@ class MainWindow(QMainWindow):
         create_button.clicked.connect(self.create_bid)
 
         info = QLabel(
-            "Create Bid always saves JSON. If Create DOCX is checked, a Word bid proposal is also generated. PDF export will be added in Task 003."
+            "Create Bid always saves JSON. If Create DOCX is checked, a Word bid proposal is also generated. PDF export is not implemented yet."
         )
         info.setWordWrap(True)
 

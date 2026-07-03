@@ -57,7 +57,7 @@ def calculate_totals(
     """Calculate bid totals using Decimal arithmetic.
 
     ``tax_rate_percent`` is retained for backward compatibility with older saved data,
-    but sales tax is no longer included in proposal totals as of Task 002E.
+    but sales tax is not included in proposal totals.
     """
     subtotal = quantize_money(sum(pricing_amounts, Decimal("0")))
     sales_tax_amount = Decimal("0.00")
