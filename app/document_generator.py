@@ -32,6 +32,13 @@ def build_render_context(bid_data: BidData) -> dict[str, Any]:
         }
         for line in bid_data.pricing_lines
     ]
+    alternate_pricing_lines = [
+        {
+            "description": line.description,
+            "amount_display": format_currency(line.amount),
+        }
+        for line in bid_data.alternate_pricing_lines
+    ]
 
     bid = {
         "document_type": normalize_document_type(bid_data.document_type),
@@ -54,6 +61,10 @@ def build_render_context(bid_data: BidData) -> dict[str, Any]:
         "lead_time": bid_data.lead_time,
         "pricing_valid_days": bid_data.pricing_valid_days,
         "additional_terms": bid_data.additional_terms,
+        "include_prevailing_wage_statement": bid_data.include_prevailing_wage_statement,
+        "prevailing_wage_statement": bid_data.prevailing_wage_statement,
+        "include_alternate_pricing": bid_data.include_alternate_pricing,
+        "alternate_pricing_total_display": format_currency(bid_data.alternate_pricing_total),
         "project_notes": bid_data.project_notes,
         "authorized_signer": bid_data.authorized_signer,
         "signature_date": bid_data.signature_date,
@@ -65,6 +76,7 @@ def build_render_context(bid_data: BidData) -> dict[str, Any]:
         "addenda_acknowledgements": bid_data.addenda_acknowledgements,
         "additional_terms_items": bid_data.additional_terms_items,
         "pricing_lines": pricing_lines,
+        "alternate_pricing_lines": alternate_pricing_lines,
     }
 
 

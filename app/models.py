@@ -9,6 +9,9 @@ from app.calculations import decimal_to_json
 
 
 SUPPORTED_DOCUMENT_TYPES = {"Bid Proposal", "Estimate"}
+DEFAULT_PREVAILING_WAGE_STATEMENT = (
+    "Applicable prevailing wage labor rates are included where required by the project."
+)
 
 
 def normalize_document_type(value: str | None) -> str:
@@ -42,6 +45,9 @@ class BidData:
     addenda_acknowledgements: list[str] = field(default_factory=list)
     additional_terms_items: list[str] = field(default_factory=list)
     pricing_lines: list[PricingLine] = field(default_factory=list)
+    include_alternate_pricing: bool = False
+    alternate_pricing_lines: list[PricingLine] = field(default_factory=list)
+    alternate_pricing_total: Decimal = Decimal("0.00")
     tax_rate_percent: Decimal = Decimal("0")
     deposit_percent: Decimal = Decimal("0")
     subtotal: Decimal = Decimal("0.00")
@@ -52,6 +58,8 @@ class BidData:
     lead_time: str = ""
     pricing_valid_days: str = ""
     additional_terms: str = ""
+    include_prevailing_wage_statement: bool = False
+    prevailing_wage_statement: str = DEFAULT_PREVAILING_WAGE_STATEMENT
     project_notes: str = ""
     authorized_signer: str = ""
     signature_date: str = ""
@@ -65,7 +73,9 @@ class BidData:
     def to_dict(self) -> dict:
         data = asdict(self)
         data["pricing_lines"] = [line.to_dict() for line in self.pricing_lines]
+        data["alternate_pricing_lines"] = [line.to_dict() for line in self.alternate_pricing_lines]
         for key in (
+            "alternate_pricing_total",
             "tax_rate_percent",
             "deposit_percent",
             "subtotal",

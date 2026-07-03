@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from app.calculations import calculate_totals, format_currency, parse_money, parse_percent
 from app.document_generator import generate_docx_bid
-from app.models import BidData, PricingLine
+from app.models import DEFAULT_PREVAILING_WAGE_STATEMENT, BidData, PricingLine
 from app.settings import (
     APP_NAME,
     DEFAULT_PRICING_ROWS,
@@ -40,6 +40,7 @@ from app.settings import (
     MAX_PRICING_LINES,
     MAX_SCOPE_ITEMS,
     MAX_ADDITIONAL_TERMS,
+    MAX_ALTERNATE_PRICING_LINES,
 )
 from app.storage import save_bid_json
 
@@ -50,13 +51,14 @@ MEASUREMENT_READINESS_TEXT = (
     "Additional trips, re-measures, or delays caused by incomplete site conditions, inaccessible areas, unclear requirements, construction changes, or other conditions outside Perfect Shade LLC’s control may result in additional charges."
 )
 SALES_TAX_NOTICE_TEXT = "Applicable sales tax will be added unless a valid tax exemption certificate is provided."
+RETAINAGE_TERM_TEXT = "Maximum retainage shall be limited to 5% of the contract amount unless otherwise agreed in writing."
 CRAFTSMANSHIP_WARRANTY_TEXT = (
     "Perfect Shade provides a one-year craftsmanship warranty on installation labor. This warranty covers defects in workmanship under normal use and does not cover product defects, misuse, damage by others, changes to surrounding construction, or conditions outside Perfect Shade’s control."
 )
-ABOUT_PERFECT_SHADE_TEXT = (
-    "Perfect Shade is a locally owned and operated window covering company known for consistent delivery, attention to detail, and dependable project execution. "
-    "We work closely with general contractors and project managers to provide practical solutions that meet both budget and performance expectations. Our approach includes thoughtful value engineering when appropriate, helping streamline product selection without sacrificing quality or durability. "
-    "With a strong reputation for reliability and clean professional installations, Perfect Shade takes pride in completing each project on time and with high standards of workmanship."
+COMPANY_QUALIFICATIONS_TEXT = (
+    "Perfect Shade LLC is a locally owned and operated window covering company serving commercial, healthcare, municipal, educational, multifamily, and professional facilities throughout Eastern Oregon and Eastern Washington. "
+    "We routinely assist with value engineering, product coordination, dependable project execution, and clean professional installation. Our lead installer has more than 15 years of experience installing window coverings throughout the Tri-Cities and surrounding region. "
+    "References are available upon request."
 )
 
 
@@ -179,6 +181,31 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.pricing_table)
         layout.addLayout(button_layout)
+
+        alternate_box = QGroupBox("Alternate Pricing")
+        alternate_layout = QVBoxLayout(alternate_box)
+        self.include_alternate_pricing_checkbox = QCheckBox("Include Alternate Pricing")
+        self.alternate_pricing_table = QTableWidget(0, 2)
+        self.alternate_pricing_table.setHorizontalHeaderLabels(["Description", "Amount"])
+        self.alternate_pricing_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.alternate_pricing_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.alternate_pricing_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.alternate_pricing_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.alternate_pricing_table.verticalHeader().setVisible(False)
+        alternate_buttons = QHBoxLayout()
+        add_alternate_button = QPushButton("Add Alternate Price")
+        remove_alternate_button = QPushButton("Remove Selected Alternate Price")
+        add_alternate_button.clicked.connect(self.add_alternate_pricing_row)
+        remove_alternate_button.clicked.connect(self.remove_alternate_pricing_row)
+        alternate_buttons.addWidget(add_alternate_button)
+        alternate_buttons.addWidget(remove_alternate_button)
+        alternate_buttons.addStretch()
+        alternate_layout.addWidget(self.include_alternate_pricing_checkbox)
+        alternate_layout.addWidget(self.alternate_pricing_table)
+        alternate_layout.addLayout(alternate_buttons)
+        self.add_alternate_pricing_row()
+
+        layout.addWidget(alternate_box)
         layout.addWidget(totals_box)
 
         for _ in range(DEFAULT_PRICING_ROWS):
@@ -196,6 +223,10 @@ class MainWindow(QMainWindow):
 
         self.lead_time_edit = QLineEdit()
         self.pricing_valid_days_edit = QLineEdit()
+        self.include_prevailing_wage_checkbox = QCheckBox("Include Prevailing Wage Statement")
+        self.prevailing_wage_statement_edit = QTextEdit()
+        self.prevailing_wage_statement_edit.setPlainText(DEFAULT_PREVAILING_WAGE_STATEMENT)
+        self.prevailing_wage_statement_edit.setMinimumHeight(70)
         self.project_notes_edit = QTextEdit()
         self.authorized_signer_edit = QLineEdit()
         self.signature_date_edit = QLineEdit()
@@ -229,9 +260,20 @@ class MainWindow(QMainWindow):
         core_terms_layout = QFormLayout(core_terms_box)
         core_terms_layout.addRow("Pricing Valid For Days", self.pricing_valid_days_edit)
         core_terms_layout.addRow("Estimated Lead Time", self.lead_time_edit)
+        retainage_preview = QTextEdit()
+        retainage_preview.setPlainText(RETAINAGE_TERM_TEXT)
+        retainage_preview.setReadOnly(True)
+        retainage_preview.setMinimumHeight(55)
+        core_terms_layout.addRow("Retainage", retainage_preview)
         page_layout.addWidget(core_terms_box)
 
         page_layout.addWidget(self._read_only_preview_group("Sales Tax Notice", SALES_TAX_NOTICE_TEXT))
+
+        prevailing_wage_box = QGroupBox("Prevailing Wage")
+        prevailing_wage_layout = QVBoxLayout(prevailing_wage_box)
+        prevailing_wage_layout.addWidget(self.include_prevailing_wage_checkbox)
+        prevailing_wage_layout.addWidget(self.prevailing_wage_statement_edit)
+        page_layout.addWidget(prevailing_wage_box)
 
         terms_box = QGroupBox("Additional Terms / Exclusions")
         terms_layout = QVBoxLayout(terms_box)
@@ -241,6 +283,8 @@ class MainWindow(QMainWindow):
         self.additional_terms_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.additional_terms_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.additional_terms_table.verticalHeader().setVisible(False)
+        self.additional_terms_table.verticalHeader().setDefaultSectionSize(32)
+        self.additional_terms_table.setMinimumHeight(170)
         term_buttons = QHBoxLayout()
         add_term_button = QPushButton("Add Term / Exclusion")
         remove_term_button = QPushButton("Remove Selected Term / Exclusion")
@@ -256,7 +300,7 @@ class MainWindow(QMainWindow):
 
         page_layout.addWidget(self._read_only_preview_group("Measurement Readiness", MEASUREMENT_READINESS_TEXT))
         page_layout.addWidget(self._read_only_preview_group("Craftsmanship Warranty", CRAFTSMANSHIP_WARRANTY_TEXT))
-        page_layout.addWidget(self._read_only_preview_group("About Perfect Shade", ABOUT_PERFECT_SHADE_TEXT))
+        page_layout.addWidget(self._read_only_preview_group("Company Qualifications", COMPANY_QUALIFICATIONS_TEXT))
 
         notes_box = QGroupBox("Project Notes")
         notes_layout = QVBoxLayout(notes_box)
@@ -357,6 +401,20 @@ class MainWindow(QMainWindow):
         if row >= 0:
             self.additional_terms_table.removeRow(row)
 
+    def add_alternate_pricing_row(self) -> None:
+        if self.alternate_pricing_table.rowCount() >= MAX_ALTERNATE_PRICING_LINES:
+            self.show_error(f"Alternate pricing supports up to {MAX_ALTERNATE_PRICING_LINES} lines.")
+            return
+        row = self.alternate_pricing_table.rowCount()
+        self.alternate_pricing_table.insertRow(row)
+        self.alternate_pricing_table.setItem(row, 0, QTableWidgetItem(""))
+        self.alternate_pricing_table.setItem(row, 1, QTableWidgetItem(""))
+
+    def remove_alternate_pricing_row(self) -> None:
+        row = self.alternate_pricing_table.currentRow()
+        if row >= 0:
+            self.alternate_pricing_table.removeRow(row)
+
     def add_pricing_row(self) -> None:
         if self.pricing_table.rowCount() >= MAX_PRICING_LINES:
             self.show_error(f"Pricing supports up to {MAX_PRICING_LINES} lines.")
@@ -417,6 +475,21 @@ class MainWindow(QMainWindow):
             lines.append(PricingLine(description=description, amount=amount))
         return lines
 
+    def collect_alternate_pricing_lines(self, require_valid: bool = True) -> list[PricingLine]:
+        lines: list[PricingLine] = []
+        for row in range(self.alternate_pricing_table.rowCount()):
+            description = self.table_text(self.alternate_pricing_table, row, 0)
+            amount_text = self.table_text(self.alternate_pricing_table, row, 1)
+            if not description and not amount_text:
+                continue
+            if not amount_text:
+                if require_valid:
+                    raise ValueError(f"Alternate pricing line {row + 1} needs an amount.")
+                continue
+            amount = parse_money(amount_text)
+            lines.append(PricingLine(description=description, amount=amount))
+        return lines
+
     def current_totals(self) -> tuple[Decimal, Decimal, object]:
         tax_rate = Decimal("0")
         deposit_percent = parse_percent(self.deposit_percent_edit.text(), "Deposit %")
@@ -451,6 +524,15 @@ class MainWindow(QMainWindow):
         if not pricing_lines:
             raise ValueError("At least one pricing line with a valid amount is required.")
 
+        alternate_pricing_lines = self.collect_alternate_pricing_lines(
+            require_valid=self.include_alternate_pricing_checkbox.isChecked()
+        )
+        if self.include_alternate_pricing_checkbox.isChecked() and not alternate_pricing_lines:
+            raise ValueError(
+                "Include Alternate Pricing is checked, but no valid alternate pricing rows were entered."
+            )
+        alternate_pricing_total = sum((line.amount for line in alternate_pricing_lines), Decimal("0.00"))
+
         output_folder = self.output_folder_edit.text().strip()
         if not output_folder:
             raise ValueError("Please select an output folder.")
@@ -469,6 +551,9 @@ class MainWindow(QMainWindow):
             addenda_acknowledgements=self.collect_addenda_acknowledgements(),
             additional_terms_items=self.collect_additional_terms_items(),
             pricing_lines=pricing_lines,
+            include_alternate_pricing=self.include_alternate_pricing_checkbox.isChecked(),
+            alternate_pricing_lines=alternate_pricing_lines,
+            alternate_pricing_total=alternate_pricing_total,
             tax_rate_percent=tax_rate,
             deposit_percent=deposit_percent,
             subtotal=totals.subtotal,
@@ -479,6 +564,9 @@ class MainWindow(QMainWindow):
             lead_time=self.lead_time_edit.text().strip(),
             pricing_valid_days=self.pricing_valid_days_edit.text().strip(),
             additional_terms="\n".join(self.collect_additional_terms_items()),
+            include_prevailing_wage_statement=self.include_prevailing_wage_checkbox.isChecked(),
+            prevailing_wage_statement=self.prevailing_wage_statement_edit.toPlainText().strip()
+            or DEFAULT_PREVAILING_WAGE_STATEMENT,
             project_notes=self.project_notes_edit.toPlainText().strip(),
             authorized_signer=self.authorized_signer_edit.text().strip(),
             signature_date=self.signature_date_edit.text().strip(),
